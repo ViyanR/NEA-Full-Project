@@ -103,7 +103,7 @@ def Login(username,passwordhash):
 	LoggedIn[username] = result[0][1]
 
 
-def Logout(username, GameInProgress, CurrentBoard=bytes(), MoveStack=bytes(), TimeStamp='', TimeRemaining=0, Colour='', State=''):
+def Logout(username, GameInProgress, CurrentBoard=[], MoveStack=[], TimeStamp='', TimeRemaining=0, Colour='', State=''):
 	global LoggedIn
 	if username not in LoggedIn.keys(): raise NotLoggedIn
 	if GameInProgress:
@@ -112,10 +112,13 @@ def Logout(username, GameInProgress, CurrentBoard=bytes(), MoveStack=bytes(), Ti
 
 
 def SaveGame(CurrentBoard, MoveStack, TimeStamp, TimeRemaining, P1ID, P1Colour, P1State):
-	pdata = cPickle.dumps(data, cPickle.HIGHEST_PROTOCOL)
-	
+	CurrentBoardData = cPickle.dumps(CurrentBoard, -1)
+	CurrentBoardBlob = sqlite3.Binary(CurrentBoardData)
+	MoveStackData = cPickle.dumps(MoveStack, -1)
+	MoveStackBlob = sqlite3.Binary(MoveStackData)
+
 	insert = f"""INSERT INTO Game (CurrentBoard, MoveStack, TimeStamp, TimeRemaining)
-									VALUES ('{CurrentBoard}', '{MoveStack}', '{TimeStamp}', '{TimeRemaining}')"""
+									VALUES ('{CurrentBoardBlob}', '{MoveStackBlob}', '{TimeStamp}', '{TimeRemaining}')"""
 	conn.execute(insert)
 	query = f"""SELECT last_insert_rowid()"""
 	GameID = list(conn.execute(query))[0][0]
@@ -124,13 +127,13 @@ def SaveGame(CurrentBoard, MoveStack, TimeStamp, TimeRemaining, P1ID, P1Colour, 
 	conn.execute(insert)
 	P2State = {'Won':'Lost','Lost':'Won','Drew':'Drew','MyTurn':'TheirTurn','TheirTurn':'MyTurn'}[P1State]
 	insert = f"""INSERT INTO GamePlayed (GameID, PlayerID, PlayerColour, State)
-									VALUES ('{GameID}', '{(LoggedIn.values()-[P1ID])[0]}', '{(['B','W']-P1ID)[0]}', '{P2State}')"""
+									VALUES ('{GameID}', '{[i for i in LoggedIn.values() if i!=P1ID][0]}', '{ {'B':'W','W':'B'}[P1Colour]}', '{P2State}')"""
 	conn.execute(insert)
 
-def ForfeitGame(CurrentBoard, MoveStack, TimeStamp, TimeRemaining, P1ID, P1Colour, P1State):
-	SaveGame(CurrentBoard, MoveStack, TimeStamp, TimeRemaining, P1ID, P1Colour, 'Lost')
 
-
+def ForfeitGame(username, CurrentBoard, MoveStack, TimeStamp, TimeRemaining, P1Colour):
+	if username not in LoggedIn.keys(): raise AccountNotFound
+	SaveGame(CurrentBoard, MoveStack, TimeStamp, TimeRemaining, LoggedIn[username], P1Colour, 'Lost')
 
 
 def ShowLeaderboard():
@@ -146,17 +149,21 @@ def ShowLeaderboard():
 		states = [j[0] for j in result]
 		score = (3 * states.count('Won')) + (1 * states.count('Drew'))
 		leaderboard.append({'PlayerID':i+1, 'Username': result[0][1], 'Wins':states.count('Won'), 'Losses':states.count('Lost'), 'Draws':states.count('Drew'), 'Points':score})
-	
+		
 	leaderboard.sort(key = operator.itemgetter('Points'), reverse = True)
 	return leaderboard
 
 
-#print(bytes([1,7,14,12]).hex())
-#quit()
+
+
 CreateTables()
-CreateAccount('Yunger','numeter')
-CreateAccount('Blood','Crip')
-Logout('Blood', True, bytes([1,7,6,9]).hex(), bytes([1,7,16,13]).hex(), '2020-07-11 15:31:15', 29, 'B', 'Won')
+CreateAccount('Viyan','password')
+CreateAccount('Rohan','niff')
+Logout('Rohan', True, [[12,342,234,245345],[234,453,234]], [12,342,234,245345], '2020-07-11 15:31:15', LoggedIn['Rohan'], 'W', 'Won')
+
+print('GamePlayed:', list(conn.execute('SELECT * FROM GamePlayed')))
+print('Game: ', list(conn.execute('SELECT * FROM Game')))
+print('Player: ', list(conn.execute('SELECT * FROM Player')))
 
 conn.commit()
 conn.close()
